@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Données de la boite : {{ box_id }}</title>
+    <script src="https://code.highcharts.com/highcharts.js"></script>
+</head>
+<body>
+    <div id="chart-container" style="width: 100%; height: 100%;"></div>
+
+    <script>
+        var chartData = {{ data | tojson | safe }};
+
+
+        // Create a Highcharts chart configuration
+        var chartOptions = {
+            chart: {
+                type: 'areaspline'
+            },
+            title: {
+                text: 'Production et consommation'
+            },
+            xAxis: {
+                type: "datetime",
+                labels: {
+                    step: 5,
+                    formatter: function () {
+                        // 'this.value' represents the timestamp in milliseconds
+                        // Use Highcharts.dateFormat() for formatting
+                        return Highcharts.dateFormat("%H:%M", new Date(this.value).getTime());
+                    }
+                },
+                categories: chartData.entries
+            },
+            yAxis: {
+                title: {
+                    text: 'Values'
+                }
+            },
+            plotOptions: {
+                series: {
+                    marker: {
+                        symbol: "circle"
+                    },
+                    lineWidth: 4
+                }
+            },
+            series: [{
+                name: "Consommation",
+                data: chartData.consumption,
+                color: "#7e7e7e"
+            }, {
+                name: "Production",
+                data: chartData.production,
+                color: "#97bf0d"
+            }]
+        };
+
+        Highcharts.chart('chart-container', chartOptions);
+    </script>
+    <script>
+        setTimeout(function() { location.reload(); }, 120000);
+    </script>
+</body>
+</html>
+

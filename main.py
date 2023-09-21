@@ -1,6 +1,7 @@
 import argparse
 import requests
 from datetime import datetime, timedelta
+from flask import Flask, render_template
 
 
 DEBUG = False
@@ -18,6 +19,44 @@ session.headers = {
     'Accept-Language': 'fr,fr-FR;q=0.8,en-US;q=0.5,en;q=0.3',
     'Connection': 'keep-alive',
 }
+
+app = Flask(__name__)
+
+
+@app.route('/')
+def home():
+    if not login(username, password):
+        return render_template("index.html", content="Erreur lors du login")
+    box_id = get_box_id()
+    if not box_id:
+        return render_template("index.html", content="Erreur lors de la récupération de l'ID de la boite")
+    response = get_last_hour(box_id)
+    if not response:
+        return render_template("index.html", content="Erreur lors de la récupération des données")
+    data = data_for_highcharts(response.json())
+    return render_template('index.html', box_id=box_id, data=data)
+
+
+def data_for_highcharts(json_data):
+    data = {
+        "entries": [],
+        "production": [],
+        "consumption": [],
+    } 
+    current_time = datetime.now()
+    one_hour_ago = current_time - timedelta(hours=1)
+
+    for i, entry in enumerate(json_data):
+        timestamp = one_hour_ago + timedelta(minutes=i*2)
+        try:
+            data["entries"].append(timestamp)
+            data["production"].append(entry["productionFlow"])
+            data["consumption"].append(entry["consumptionFlow"])
+        except KeyError:
+            data["entries"].append("")
+            data["production"].append("")
+            data["consumption"].append("")
+    return data
 
 
 def login(username, password):
@@ -108,9 +147,4 @@ if __name__ == "__main__":
     username = args.username
     password = args.password
 
-    if not login(username, password):
-        exit()
-    box_id = get_box_id()
-    response = get_last_hour(box_id)
-    if response:
-        print(response.json())
+    app.run(host="0.0.0.0", port=5000, debug=True)
