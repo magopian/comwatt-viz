@@ -1,4 +1,5 @@
 import argparse
+import hashlib
 import requests
 from datetime import datetime, timedelta
 from flask import Flask, render_template
@@ -26,13 +27,13 @@ app = Flask(__name__)
 @app.route('/')
 def home():
     if not login(username, password):
-        return render_template("index.html", content="Erreur lors du login")
+        return render_template("index.html", error="Erreur lors du login")
     box_id = get_box_id()
     if not box_id:
-        return render_template("index.html", content="Erreur lors de la récupération de l'ID de la boite")
+        return render_template("index.html", error="Erreur lors de la récupération de l'ID de la boite")
     response = get_last_hour(box_id)
     if not response:
-        return render_template("index.html", content="Erreur lors de la récupération des données")
+        return render_template("index.html", error="Erreur lors de la récupération des données")
     data = data_for_highcharts(response.json())
     return render_template('index.html', box_id=box_id, data=data)
 
@@ -59,10 +60,23 @@ def data_for_highcharts(json_data):
     return data
 
 
+def hash_password(password):
+    salted_password = f"jbjaonfusor_{password}_4acuttbuik9"
+
+    sha256_hash = hashlib.sha256()
+
+    # Update the hash object with the bytes of the string
+    sha256_hash.update(salted_password.encode())
+
+    # Get the hexadecimal representation of the hash
+    hashed_string = sha256_hash.hexdigest()
+    return hashed_string
+
+
 def login(username, password):
     login_data = {
         'username': username,
-        'password': password,
+        'password': hash_password(password),
     }
 
     login_response = session.post(LOGIN_URL, data=login_data)
