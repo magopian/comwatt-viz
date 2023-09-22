@@ -30,20 +30,22 @@ app = Flask(__name__)
 app.secret_key = SECRET_KEY
 
 
+
 @app.route("/")
 def home():
-    session["foobar"] = "barbaz"
-    if "cwt_session" in session:
+    session.permanent = True
+    cwt_session = session.get("cwt_session", None)
+    box_id = session.get("box_id", None)
+    if cwt_session and box_id:
         request_session.cookies["cwt_session"] = session["cwt_session"]
     else:
         return redirect(url_for("login"))
 
-    box_id = get_box_id()
-    if not box_id:
-        return render_template("index.html", error="Erreur lors de la récupération de l'ID de la boite")
     response = get_last_hour(box_id)
     if not response:
-        return render_template("index.html", error="Erreur lors de la récupération des données")
+        flash("Erreur lors de la récupération des données", "danger")
+        return render_template("index.html")
+
     data = data_for_highcharts(response.json())
     return render_template("index.html", box_id=box_id, data=data)
 
@@ -56,19 +58,27 @@ class LoginForm(FlaskForm):
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
+    session.permanent = True
     form = LoginForm()
 
     if form.validate_on_submit():
         username = form.username.data
         password = form.password.data
         cwt_session = authenticate(username, password)
-        if cwt_session:
-            session["cwt_session"] = cwt_session
-            session.permanent = True
-            return redirect(url_for("home"))
-        else:
+        if not cwt_session:
             session.pop("cwt_session", default=None)
-            flash("Login failed. Please check your username and password.", "danger")
+            flash("Erreur de login, veuillez vérifier votre email et mot de passe", "danger")
+            return render_template("login.html", form=form)
+
+        session["cwt_session"] = cwt_session
+        box_id = get_box_id()
+        if not box_id:
+            session.pop("box_id", default=None)
+            flash("Erreur lors de la récupération de l'ID de la boite", "danger")
+            return render_template("login.html", form=form)
+
+        session["box_id"] = box_id
+        return redirect(url_for("home"))
 
     return render_template("login.html", form=form)
 
@@ -137,6 +147,7 @@ def get_box_id():
         print("Didn't get the owner id")
         print(response.status_code)
         print(response.json())
+        print("debug info:", request_session.cookies)
         return None
 
     ownerid = response.json()["id"]
