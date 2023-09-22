@@ -14,7 +14,8 @@ AUTHENTICATED_URL = "https://go.comwatt.com/api/users/authenticated"
 INDEP_BOXES = "https://go.comwatt.com/api/indepboxes"
 API_URL = "https://go.comwatt.com/api"
 API_PATH = "/aggregations/networkstats"
-SECRET_KEY = os.urandom(24)
+SECRET_KEY = os.environ.get("SECRET_KEY", os.urandom(24))
+PORT = os.environ.get("PORT", 5000)
 
 # Create a session to persist cookies across requests
 session = requests.Session()
@@ -41,16 +42,16 @@ def home():
     if not response:
         return render_template("index.html", error="Erreur lors de la récupération des données")
     data = data_for_highcharts(response.json())
-    return render_template('index.html', box_id=box_id, data=data)
+    return render_template("index.html", box_id=box_id, data=data)
 
 
 class LoginForm(FlaskForm):
-    username = StringField('Username', validators=[InputRequired(), Length(min=4, max=20)])
-    password = PasswordField('Password', validators=[InputRequired(), Length(min=6, max=80)])
-    submit = SubmitField('Login')
+    username = StringField("Username", validators=[InputRequired(), Length(min=4, max=20)])
+    password = PasswordField("Password", validators=[InputRequired(), Length(min=6, max=80)])
+    submit = SubmitField("Login")
 
 
-@app.route("/login", methods=['GET', 'POST'])
+@app.route("/login", methods=["GET", "POST"])
 def login():
     form = LoginForm()
 
@@ -102,8 +103,8 @@ def hash_password(password):
 
 def authenticate(username, password):
     login_data = {
-        'username': username,
-        'password': hash_password(password),
+        "username": username,
+        "password": hash_password(password),
     }
 
     login_response = session.post(LOGIN_URL, data=login_data)
@@ -170,5 +171,4 @@ def get_last_hour(box_id):
 
 
 if __name__ == "__main__":
-    port = os.environ.get('PORT', 5000)
-    app.run(host="0.0.0.0", port=port, debug=True)
+    app.run(host="0.0.0.0", port=PORT, debug=True)
