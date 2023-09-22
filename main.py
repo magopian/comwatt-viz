@@ -2,7 +2,7 @@ import hashlib
 import os
 import requests
 from datetime import datetime, timedelta
-from flask import Flask, flash, redirect, render_template, url_for
+from flask import Flask, flash, redirect, render_template, session, url_for
 from flask_wtf import FlaskForm
 from wtforms import StringField, PasswordField, SubmitField
 from wtforms.validators import InputRequired, Length
@@ -18,8 +18,8 @@ SECRET_KEY = os.environ.get("SECRET_KEY", os.urandom(24))
 PORT = os.environ.get("PORT", 5000)
 
 # Create a session to persist cookies across requests
-session = requests.Session()
-session.headers = {
+request_session = requests.Session()
+request_session.headers = {
     'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:109.0) Gecko/20100101 Firefox/116.0',
     'Accept': 'application/json, text/plain, */*',
     'Accept-Language': 'fr,fr-FR;q=0.8,en-US;q=0.5,en;q=0.3',
@@ -32,7 +32,10 @@ app.secret_key = SECRET_KEY
 
 @app.route("/")
 def home():
-    if "cwt_session" not in session.cookies:
+    session["foobar"] = "barbaz"
+    if "cwt_session" in session:
+        request_session.cookies["cwt_session"] = session["cwt_session"]
+    else:
         return redirect(url_for("login"))
 
     box_id = get_box_id()
@@ -58,12 +61,22 @@ def login():
     if form.validate_on_submit():
         username = form.username.data
         password = form.password.data
-        if authenticate(username, password):
+        cwt_session = authenticate(username, password)
+        if cwt_session:
+            session["cwt_session"] = cwt_session
+            session.permanent = True
             return redirect(url_for("home"))
         else:
+            session.pop("cwt_session", default=None)
             flash("Login failed. Please check your username and password.", "danger")
 
     return render_template("login.html", form=form)
+
+
+@app.route("/logout")
+def logout():
+    session.pop("cwt_session", default=None)
+    return redirect(url_for("login"))
 
 
 def data_for_highcharts(json_data):
@@ -107,10 +120,10 @@ def authenticate(username, password):
         "password": hash_password(password),
     }
 
-    login_response = session.post(LOGIN_URL, data=login_data)
+    login_response = request_session.post(LOGIN_URL, data=login_data)
 
     if login_response.status_code == 200 and "cwt_session" in login_response.cookies:
-        return True
+        return login_response.cookies["cwt_session"]
     else:
         print("Login failed.")
         print(login_response.status_code)
@@ -119,7 +132,7 @@ def authenticate(username, password):
 
 
 def get_box_id():
-    response = session.get(AUTHENTICATED_URL)
+    response = request_session.get(AUTHENTICATED_URL)
     if response.status_code != 200 or "id" not in response.json():
         print("Didn't get the owner id")
         print(response.status_code)
@@ -128,7 +141,7 @@ def get_box_id():
 
     ownerid = response.json()["id"]
 
-    response = session.get(INDEP_BOXES + f"?ownerid={ownerid}")
+    response = request_session.get(INDEP_BOXES + f"?ownerid={ownerid}")
 
     if response.status_code != 200 or "content" not in response.json():
         print("Didn't get the owner's boxes")
@@ -160,7 +173,7 @@ def get_last_hour(box_id):
 
     print("json url", json_url)
 
-    response = session.get(json_url)
+    response = request_session.get(json_url)
 
     if response.status_code == 200:
         return response
