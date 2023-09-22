@@ -1,8 +1,11 @@
-import argparse
 import hashlib
+import os
 import requests
 from datetime import datetime, timedelta
-from flask import Flask, render_template
+from flask import Flask, flash, redirect, render_template, url_for
+from flask_wtf import FlaskForm
+from wtforms import StringField, PasswordField, SubmitField
+from wtforms.validators import InputRequired, Length
 
 
 DEBUG = False
@@ -11,6 +14,7 @@ AUTHENTICATED_URL = "https://go.comwatt.com/api/users/authenticated"
 INDEP_BOXES = "https://go.comwatt.com/api/indepboxes"
 API_URL = "https://go.comwatt.com/api"
 API_PATH = "/aggregations/networkstats"
+SECRET_KEY = os.urandom(24)
 
 # Create a session to persist cookies across requests
 session = requests.Session()
@@ -22,12 +26,14 @@ session.headers = {
 }
 
 app = Flask(__name__)
+app.secret_key = SECRET_KEY
 
 
-@app.route('/')
+@app.route("/")
 def home():
-    if not login(username, password):
-        return render_template("index.html", error="Erreur lors du login")
+    if "cwt_session" not in session.cookies:
+        return redirect(url_for("login"))
+
     box_id = get_box_id()
     if not box_id:
         return render_template("index.html", error="Erreur lors de la récupération de l'ID de la boite")
@@ -38,12 +44,33 @@ def home():
     return render_template('index.html', box_id=box_id, data=data)
 
 
+class LoginForm(FlaskForm):
+    username = StringField('Username', validators=[InputRequired(), Length(min=4, max=20)])
+    password = PasswordField('Password', validators=[InputRequired(), Length(min=6, max=80)])
+    submit = SubmitField('Login')
+
+
+@app.route("/login", methods=['GET', 'POST'])
+def login():
+    form = LoginForm()
+
+    if form.validate_on_submit():
+        username = form.username.data
+        password = form.password.data
+        if authenticate(username, password):
+            return redirect(url_for("home"))
+        else:
+            flash("Login failed. Please check your username and password.", "danger")
+
+    return render_template("login.html", form=form)
+
+
 def data_for_highcharts(json_data):
     data = {
         "entries": [],
         "production": [],
         "consumption": [],
-    } 
+    }
     current_time = datetime.now()
     one_hour_ago = current_time - timedelta(hours=1)
 
@@ -73,7 +100,7 @@ def hash_password(password):
     return hashed_string
 
 
-def login(username, password):
+def authenticate(username, password):
     login_data = {
         'username': username,
         'password': hash_password(password),
@@ -143,22 +170,5 @@ def get_last_hour(box_id):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(
-        description="""Retrieve the last hour of energy consumption and production.
-                    Usage example:
-                    python main.py --username your_username --password your_password
-        """
-    )
-
-    # Add command-line arguments for username and password
-    parser.add_argument('--username', required=True, help='Username')
-    parser.add_argument('--password', required=True, help='Password')
-
-    # Parse the command-line arguments
-    args = parser.parse_args()
-
-    # Retrieve the username and password from the parsed arguments
-    username = args.username
-    password = args.password
-
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    port = os.environ.get('PORT', 5000)
+    app.run(host="0.0.0.0", port=port, debug=True)
