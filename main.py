@@ -37,12 +37,13 @@ def home():
     cwt_session = session.get("cwt_session", None)
     box_id = session.get("box_id", None)
     if cwt_session and box_id:
-        request_session.cookies["cwt_session"] = session["cwt_session"]
+        request_session.cookies["cwt_session"] = cwt_session
     else:
         return redirect(url_for("login"))
 
     response = get_last_hour(box_id)
     if not response:
+        print("debug info:", request_session.cookies)
         flash("Erreur lors de la récupération des données", "danger")
         return render_template("index.html")
 
