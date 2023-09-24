@@ -30,63 +30,81 @@ app = Flask(__name__)
 app.secret_key = SECRET_KEY
 
 
+def warning(msg):
+    flash(msg, "danger")
+
 
 @app.route("/")
 def home():
     session.permanent = True
-    cwt_session = session.get("cwt_session", None)
+    username = session.get("username", None)
+    hashed_password = session.get("hashed_password", None)
     box_id = session.get("box_id", None)
-    if cwt_session and box_id:
-        request_session.cookies["cwt_session"] = cwt_session
-    else:
+
+    if not username or not hashed_password or not box_id:
+        return redirect(url_for("login"))
+
+    if not authenticate(username, hashed_password):
+        print(">>> request_session.cookies", request_session.cookies)
+        warning("Erreur lors de l'authentification")
         return redirect(url_for("login"))
 
     response = get_last_hour(box_id)
+
     if not response:
-        print("debug info:", request_session.cookies)
-        flash("Erreur lors de la récupération des données", "danger")
-        return render_template("index.html")
+        print(">>> request_session.cookies", request_session.cookies)
+        warning("Erreur lors de la récupération des données")
+        return redirect(url_for("login"))
 
     data = data_for_highcharts(response.json())
     return render_template("index.html", box_id=box_id, data=data)
 
 
 class LoginForm(FlaskForm):
-    username = StringField("Username", validators=[InputRequired(), Length(min=4, max=20)])
-    password = PasswordField("Password", validators=[InputRequired(), Length(min=6, max=80)])
+    username = StringField(
+        "Username",
+        validators=[InputRequired(), Length(min=4, max=20)])
+    password = PasswordField(
+        "Password",
+        validators=[InputRequired(), Length(min=6, max=80)])
     submit = SubmitField("Login")
 
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
+    drop_credentials()
     session.permanent = True
     form = LoginForm()
 
     if form.validate_on_submit():
-        username = form.username.data
-        password = form.password.data
-        cwt_session = authenticate(username, password)
-        if not cwt_session:
-            session.pop("cwt_session", default=None)
-            flash("Erreur de login, veuillez vérifier votre email et mot de passe", "danger")
+        username = form.username.data.lower()
+        hashed_password = hash_password(form.password.data)
+        if not authenticate(username, hashed_password):
+            warning("Erreur de login")
             return render_template("login.html", form=form)
 
-        session["cwt_session"] = cwt_session
         box_id = get_box_id()
         if not box_id:
-            session.pop("box_id", default=None)
-            flash("Erreur lors de la récupération de l'ID de la boite", "danger")
+            warning("Erreur lors de la récupération de l'ID de la boite")
             return render_template("login.html", form=form)
 
+        session["username"] = username
+        session["hashed_password"] = hashed_password
         session["box_id"] = box_id
         return redirect(url_for("home"))
 
     return render_template("login.html", form=form)
 
 
+def drop_credentials():
+    session.pop("username", default=None)
+    session.pop("hashed_password", default=None)
+    session.pop("box_id", default=None)
+
+
 @app.route("/logout")
 def logout():
-    session.pop("cwt_session", default=None)
+    drop_credentials()
     return redirect(url_for("login"))
 
 
@@ -112,8 +130,8 @@ def data_for_highcharts(json_data):
     return data
 
 
-def hash_password(password):
-    salted_password = f"jbjaonfusor_{password}_4acuttbuik9"
+def hash_password(hashed_password):
+    salted_password = f"jbjaonfusor_{hashed_password}_4acuttbuik9"
 
     sha256_hash = hashlib.sha256()
 
@@ -125,15 +143,16 @@ def hash_password(password):
     return hashed_string
 
 
-def authenticate(username, password):
+def authenticate(username, hashed_password):
     login_data = {
         "username": username,
-        "password": hash_password(password),
+        "password": hashed_password,
     }
 
     login_response = request_session.post(LOGIN_URL, data=login_data)
 
-    if login_response.status_code == 200 and "cwt_session" in login_response.cookies:
+    if (login_response.status_code == 200
+            and "cwt_session" in login_response.cookies):
         return login_response.cookies["cwt_session"]
     else:
         print("Login failed.")
