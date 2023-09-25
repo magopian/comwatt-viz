@@ -57,7 +57,12 @@ def home():
         return redirect(url_for("login"))
 
     data = data_for_highcharts(response.json())
-    return render_template("index.html", box_id=box_id, data=data)
+    overproducing = data["consumption"][-1] < data["production"][-1]
+    return render_template(
+        "index.html",
+        box_id=box_id,
+        data=data,
+        overproducing=overproducing)
 
 
 class LoginForm(FlaskForm):

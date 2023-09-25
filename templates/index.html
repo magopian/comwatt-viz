@@ -5,8 +5,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Données de la boite : {{ box_id }}</title>
     <script src="https://code.highcharts.com/highcharts.js"></script>
+    <style>
+        body.overproducing {
+            background-color: #99b731;
+        }
+    </style>
 </head>
-<body>
+<body{% if overproducing %} class="overproducing"{% endif %}>
     {% with messages = get_flashed_messages() %}
     {% if messages %}
         <ul class="flash-messages">
