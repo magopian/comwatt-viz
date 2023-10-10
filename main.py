@@ -154,7 +154,11 @@ def authenticate(username, hashed_password):
         "password": hashed_password,
     }
 
-    login_response = request_session.post(LOGIN_URL, data=login_data)
+    try:
+        login_response = request_session.post(LOGIN_URL, data=login_data)
+    except requests.exceptions.ConnectionError:
+        warning("Erreur de connexion au serveur lors du login")
+        return False
 
     if (login_response.status_code == 200
             and "cwt_session" in login_response.cookies):
@@ -167,7 +171,12 @@ def authenticate(username, hashed_password):
 
 
 def get_box_id():
-    response = request_session.get(AUTHENTICATED_URL)
+    try:
+        response = request_session.get(AUTHENTICATED_URL)
+    except requests.exceptions.ConnectionError:
+        warning("Erreur de connexion au serveur lors de la requête authentifiée")
+        return None
+
     if response.status_code != 200 or "id" not in response.json():
         print("Didn't get the owner id")
         print(response.status_code)
@@ -177,7 +186,11 @@ def get_box_id():
 
     ownerid = response.json()["id"]
 
-    response = request_session.get(INDEP_BOXES + f"?ownerid={ownerid}")
+    try:
+        response = request_session.get(INDEP_BOXES + f"?ownerid={ownerid}")
+    except requests.exceptions.ConnectionError:
+        warning("Erreur de connexion au serveur lors de la requête de l'id de la boite")
+        return None
 
     if response.status_code != 200 or "content" not in response.json():
         print("Didn't get the owner's boxes")
@@ -209,7 +222,11 @@ def get_last_hour(box_id):
 
     print("json url", json_url)
 
-    response = request_session.get(json_url)
+    try:
+        response = request_session.get(json_url)
+    except requests.exceptions.ConnectionError:
+        warning("Erreur de connexion au serveur lors de la requête des données")
+        return None
 
     if response.status_code == 200:
         return response
