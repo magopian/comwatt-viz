@@ -44,25 +44,33 @@ def home():
     if not username or not hashed_password or not box_id:
         return redirect(url_for("login"))
 
-    if not authenticate(username, hashed_password):
-        print(">>> request_session.cookies", request_session.cookies)
-        warning("Erreur lors de l'authentification")
-        return redirect(url_for("login"))
+    try:
+        if not authenticate(username, hashed_password):
+            print(">>> request_session.cookies", request_session.cookies)
+            warning("Erreur lors de l'authentification")
+            return redirect(url_for("login"))
 
-    response = get_last_hour(box_id)
+        response = get_last_hour(box_id)
 
-    if not response:
-        print(">>> request_session.cookies", request_session.cookies)
-        warning("Erreur lors de la récupération des données")
-        return redirect(url_for("login"))
+        if not response:
+            print(">>> request_session.cookies", request_session.cookies)
+            warning("Erreur lors de la récupération des données")
+            return redirect(url_for("login"))
 
-    data = data_for_highcharts(response.json())
-    overproducing = data["consumption"][-1] < data["production"][-1]
-    return render_template(
-        "index.html",
-        box_id=box_id,
-        data=data,
-        overproducing=overproducing)
+        data = data_for_highcharts(response.json())
+        overproducing = data["consumption"][-1] < data["production"][-1]
+        return render_template(
+            "index.html",
+            box_id=box_id,
+            data=data,
+            overproducing=overproducing)
+    except requests.exceptions.ConnectionError:
+        warning("Erreur de connexion au serveur")
+        return render_template(
+            "index.html",
+            box_id=None,
+            data=None,
+            overproducing=False)
 
 
 class LoginForm(FlaskForm):
@@ -154,11 +162,7 @@ def authenticate(username, hashed_password):
         "password": hashed_password,
     }
 
-    try:
-        login_response = request_session.post(LOGIN_URL, data=login_data)
-    except requests.exceptions.ConnectionError:
-        warning("Erreur de connexion au serveur lors du login")
-        return False
+    login_response = request_session.post(LOGIN_URL, data=login_data)
 
     if (login_response.status_code == 200
             and "cwt_session" in login_response.cookies):
@@ -171,11 +175,7 @@ def authenticate(username, hashed_password):
 
 
 def get_box_id():
-    try:
-        response = request_session.get(AUTHENTICATED_URL)
-    except requests.exceptions.ConnectionError:
-        warning("Erreur de connexion au serveur lors de la requête authentifiée")
-        return None
+    response = request_session.get(AUTHENTICATED_URL)
 
     if response.status_code != 200 or "id" not in response.json():
         print("Didn't get the owner id")
@@ -186,11 +186,7 @@ def get_box_id():
 
     ownerid = response.json()["id"]
 
-    try:
-        response = request_session.get(INDEP_BOXES + f"?ownerid={ownerid}")
-    except requests.exceptions.ConnectionError:
-        warning("Erreur de connexion au serveur lors de la requête de l'id de la boite")
-        return None
+    response = request_session.get(INDEP_BOXES + f"?ownerid={ownerid}")
 
     if response.status_code != 200 or "content" not in response.json():
         print("Didn't get the owner's boxes")
@@ -222,11 +218,7 @@ def get_last_hour(box_id):
 
     print("json url", json_url)
 
-    try:
-        response = request_session.get(json_url)
-    except requests.exceptions.ConnectionError:
-        warning("Erreur de connexion au serveur lors de la requête des données")
-        return None
+    response = request_session.get(json_url)
 
     if response.status_code == 200:
         return response
