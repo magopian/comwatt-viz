@@ -174,13 +174,20 @@ def authenticate(username, hashed_password):
         return False
 
 
+def dump_json(response):
+    try:
+        return response.json()
+    except requests.exceptions.JSONDecodeError:
+        return "Failed to decode json"
+
+
 def get_box_id():
     response = request_session.get(AUTHENTICATED_URL)
 
     if response.status_code != 200 or "id" not in response.json():
         print("Didn't get the owner id")
         print(response.status_code)
-        print(response.json())
+        print(dump_json(response.json()))
         print("debug info:", request_session.cookies)
         return None
 
@@ -191,7 +198,7 @@ def get_box_id():
     if response.status_code != 200 or "content" not in response.json():
         print("Didn't get the owner's boxes")
         print(response.status_code)
-        print(response.json())
+        print(dump_json(response.json()))
         return None
 
     first_box = response.json()["content"][0]
